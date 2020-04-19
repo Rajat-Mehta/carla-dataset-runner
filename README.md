@@ -1,16 +1,10 @@
-# Carla (0.9.6) dataset collector :car: :floppy_disk:
+# Carla (0.9.8) dataset collector :car: :floppy_disk:
 
-Script used for collecting data on CARLA version 0.9.6. This repository was created mainly by adapting the example python scripts from the carla repository.
+Script used for collecting data on CARLA version 0.9.8. This repository was created mainly by adapting the example python scripts from the carla repository.
 
-Types of data captured include RGB, depth and bounding box of vehicles and pedestrians collection. Other types of data (semantic segmentation, lidar, ...) are not yet implemented, but could be by following the same data structure. Here is a sample of the collected data on Town02:
+Types of data captured include LiDAR, RGB, depth, and bounding box of vehicles and pedestrians collection. Other types of data (semantic segmentation, RADAR, ...) are not yet implemented, but could be by following the same data structure. Here is a sample of the collected data on Town02:
 
 ![town02_sample](new_vids/town02_sample.gif)
-
-https://www.youtube.com/watch?v=LgSwWo82wC0
-
-https://www.youtube.com/watch?v=BWh3IdWkFcA
-
-Do note that car light lamps and pole lamps assets were added manually on my own carla source compiled version and thus at the moment are not present on neither the precompiled nor the built from source carla version.
 
 ## Getting started
 ### Prerequisites
@@ -18,8 +12,6 @@ Do note that car light lamps and pole lamps assets were added manually on my own
 * H5py
 * numpy
 * Python carla package and its dependencies 
-
-\*Until now I've only tested on Ubuntu 18.04. It might work on other OS, but that's not certain.
 
 ### Installation
 1. Clone this repo
@@ -89,8 +81,6 @@ where:
 
 After running this command, the script will begin collecting the data from the sensors by iterating over the predefined weather and ego vehicle variations. Finally, it will create a HDF5 file containing all the data and also a MP4 video showing the RGB recorded footage. 
 
-\*At the moment, to avoid high correlation between consecutive frames, it is saving only once every 5th frame.
-
 ## HDF5 data output format
 The HDF5 file is structured in the following groups, where each frame entry is assigned a common UTC timestamp. A common parser for this file is provided in [create_content_on_hdf5.py](utils/create_video_on_hdf5/create_content_on_hdf5.py).
 
@@ -99,6 +89,7 @@ The HDF5 file is structured in the following groups, where each frame entry is a
     * walkers
 * depth
 * rgb
+* lidar
 * ego_speed
 * timestamps
 
@@ -108,6 +99,7 @@ Data            | Description | Type
 bounding boxes  | array [xmin, ymin, xmax, ymax] | int 
 depth           | array [sensor_width * sensor_image] | float
 rgb             | array [sensor_width * sensor_image * 3 channels] | int
+lidar           | points coordinates from point cloud and .ply file
 ego_speed       | array [vx, vy, vz in m/s] | float
 timestamps      | UTC milisseconds since the UNIX epoch format | int
 
