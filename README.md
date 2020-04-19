@@ -1,6 +1,6 @@
 # Carla (0.9.8) dataset collector :car: :floppy_disk:
 
-Script used for collecting data on CARLA version 0.9.8. This repository was created mainly by adapting the example python scripts from the carla repository.
+Script used for collecting data on CARLA version 0.9.8. This repository is forked from [here](https://github.com/AlanNaoto/carla-dataset-runner) and was created mainly by adapting the example python scripts from the carla repository.
 
 Types of data captured include LiDAR, RGB, depth, and bounding box of vehicles and pedestrians collection. Other types of data (semantic segmentation, RADAR, ...) are not yet implemented, but could be by following the same data structure. Here is a sample of the collected data on Town02:
 
@@ -32,14 +32,7 @@ Refer to https://carla.readthedocs.io/en/latest/getting_started/ and https://git
 
 4. Set the python path for the carla egg file
 
-Open the [settings.py](settings.py) file and change the carla egg path to your own.
-
-5. Create a dir to store the to-be recorded data
-
-Navigate to dataset runner's root and create a data dir. The recorded HDF5 files will stay there.
-```
-mkdir data
-```
+Open the [settings.py](settings.py) file and change the carla egg path to your own. Make sure to have an egg file compatible with your python version.
 
 - - - -
 
@@ -69,13 +62,15 @@ Wait for some time until the world is fully loaded on your computer. In mine, wi
 
 In the cloned carla-dataset-runner repo, run in another terminal:
 ```
-python3 main.py hdf5_file -ve 100 -wa 110 -v
+python3 main.py hdf5_file -ve 100 -wa 110 -v -d -l
 ```
 where:
 * **hdf5_file** is the name of to be created hdf5 file containing all the collected data
 * **-ve** is an optional arg that spawns 100 random vehicles 
 * **-wa** is an optional arg that spawns 110 random pedestrians
 * **-v** is an optional flag to create a mp4 video file
+* **-d** is an optional flag to visualize depth data in the mp4 video file
+* **-l** is an optional flag to visualize lidar data in the mp4 video file
 
 *Further commands can be seen by running the --help flag.
 
