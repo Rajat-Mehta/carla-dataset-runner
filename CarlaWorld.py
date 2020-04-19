@@ -55,9 +55,9 @@ class CarlaWorld:
         # https://carla.readthedocs.io/en/latest/cameras_and_sensors/
         bp = self.blueprint_library.find('sensor.camera.rgb')
         # bp.set_attribute('enable_postprocess_effects', 'True')  # https://carla.readthedocs.io/en/latest/bp_library/
-        bp.set_attribute('image_size_x', f'{sensor_width}')
-        bp.set_attribute('image_size_y', f'{sensor_height}')
-        bp.set_attribute('fov', f'{fov}')
+        bp.set_attribute('image_size_x', str(sensor_width))
+        bp.set_attribute('image_size_y', str(sensor_height))
+        bp.set_attribute('fov', str(fov))
 
         # Adjust sensor relative position to the vehicle
         spawn_point = carla.Transform(carla.Location(x=self.camera_x_location, z=self.camera_z_location))
@@ -78,15 +78,41 @@ class CarlaWorld:
     def put_depth_sensor(self, vehicle, sensor_width=640, sensor_height=480, fov=110):
         # https://carla.readthedocs.io/en/latest/cameras_and_sensors/
         bp = self.blueprint_library.find('sensor.camera.depth')
-        bp.set_attribute('image_size_x', f'{sensor_width}')
-        bp.set_attribute('image_size_y', f'{sensor_height}')
-        bp.set_attribute('fov', f'{fov}')
+        bp.set_attribute('image_size_x', str(sensor_width))
+        bp.set_attribute('image_size_y', str(sensor_height))
+        bp.set_attribute('fov', str(fov))
 
         # Adjust sensor relative position to the vehicle
         spawn_point = carla.Transform(carla.Location(x=self.camera_x_location, z=self.camera_z_location))
         self.depth_camera = self.world.spawn_actor(bp, spawn_point, attach_to=vehicle)
         self.sensors_list.append(self.depth_camera)
         return self.depth_camera
+
+    def put_lidar_sensor(self, vehicle):
+        # https://carla.readthedocs.io/en/latest/cameras_and_sensors/
+        bp = self.blueprint_library.find('sensor.lidar.ray_cast')
+        bp.set_attribute('range', '50')
+        # Adjust sensor relative position to the vehicle
+        spawn_point = carla.Transform(carla.Location(x=self.camera_x_location, z=self.camera_z_location))
+        self.lidar_camera = self.world.spawn_actor(bp, spawn_point, attach_to=vehicle)
+        self.sensors_list.append(self.lidar_camera)
+        return self.lidar_camera
+
+    def process_lidar_data(self, data, sensor_width, sensor_height, data_path):
+        #data.save_to_disk(data_path + '/_out_lidar/%08d' % data.frame)
+        points = np.frombuffer(data.raw_data, dtype=np.dtype('f4'))
+        points = np.reshape(points, (int(points.shape[0] / 3), 3))
+        lidar_data = np.array(points[:, :2])
+        lidar_data *= min(sensor_width, sensor_height) / 100.0
+        lidar_data += (0.5 * sensor_width, 0.5 * sensor_height)
+        lidar_data = np.fabs(lidar_data)  # pylint: disable=E1111
+        lidar_data = lidar_data.astype(np.int32)
+        lidar_data = np.reshape(lidar_data, (-1, 2))
+        lidar_img_size = (sensor_width, sensor_height, 3)
+        lidar_img = np.zeros((lidar_img_size), dtype = int)
+        lidar_img[tuple(lidar_data.T)] = (255, 255, 255)
+        #lidar_img=np.reshape(lidar_img, (sensor_height,sensor_width,3))
+        return lidar_img
 
     def process_depth_data(self, data, sensor_width, sensor_height):
         """
@@ -121,7 +147,7 @@ class CarlaWorld:
             sensor.destroy()
         self.sensors_list = []
 
-    def begin_data_acquisition(self, sensor_width, sensor_height, fov, frames_to_record_one_ego=1, timestamps=[], egos_to_run=10):
+    def begin_data_acquisition(self, sensor_width, sensor_height, fov, data_path, frames_to_record_one_ego=1, timestamps=[], egos_to_run=10):
         # Changes the ego vehicle to be put the sensor
         current_ego_recorded_frames = 0
         # These vehicles are not considered because the cameras get occluded without changing their absolute position
@@ -129,9 +155,10 @@ class CarlaWorld:
                                      ['vehicle.audi.tt', 'vehicle.carlamotors.carlacola', 'vehicle.volkswagen.t2']])
         self.put_rgb_sensor(ego_vehicle, sensor_width, sensor_height, fov)
         self.put_depth_sensor(ego_vehicle, sensor_width, sensor_height, fov)
+        self.put_lidar_sensor(ego_vehicle)
 
         # Begin applying the sync mode
-        with CarlaSyncMode(self.world, self.rgb_camera, self.depth_camera, fps=30) as sync_mode:
+        with CarlaSyncMode(self.world, self.rgb_camera, self.depth_camera, self.lidar_camera, fps=30) as sync_mode:
             # Skip initial frames where the car is being put on the ambient
             if self.first_time_simulating:
                 for _ in range(30):
@@ -145,21 +172,22 @@ class CarlaWorld:
                 # Advance the simulation and wait for the data
                 # Skip every nth frame for data recording, so that one frame is not that similar to another
                 wait_frame_ticks = 0
-                while wait_frame_ticks < 5:
+                while wait_frame_ticks < 0:
                     sync_mode.tick_no_data()
                     wait_frame_ticks += 1
-
-                _, rgb_data, depth_data = sync_mode.tick(timeout=2.0)  # If needed, self.frame can be obtained too
+                
+                _, rgb_data, depth_data, lidar_data = sync_mode.tick(timeout=2.0)  # If needed, self.frame can be obtained too
                 # Processing raw data
                 rgb_array, bounding_box = self.process_rgb_img(rgb_data, sensor_width, sensor_height)
                 depth_array = self.process_depth_data(depth_data, sensor_width, sensor_height)
+                lidar_array= self.process_lidar_data(lidar_data, sensor_width, sensor_height, data_path)
                 ego_speed = ego_vehicle.get_velocity()
                 ego_speed = np.array([ego_speed.x, ego_speed.y, ego_speed.z])
                 bounding_box = apply_filters_to_3d_bb(bounding_box, depth_array, sensor_width, sensor_height)
                 timestamp = round(time.time() * 1000.0)
 
                 # Saving into opened HDF5 dataset file
-                self.HDF5_file.record_data(rgb_array, depth_array, bounding_box, ego_speed, timestamp)
+                self.HDF5_file.record_data(rgb_array, depth_array, lidar_array, bounding_box, ego_speed, timestamp)
                 current_ego_recorded_frames += 1
                 self.total_recorded_frames += 1
                 timestamps.append(timestamp)

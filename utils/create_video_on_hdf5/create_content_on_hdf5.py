@@ -10,6 +10,7 @@ def read_hdf5_test(hdf5_file):
         bb_vehicles = file['bounding_box']['vehicles']
         bb_walkers = file['bounding_box']['walkers']
         depth = file['depth']
+        lidar = file['lidar']
         timestamps = file['timestamps']
 
         for time in timestamps['timestamps']:
@@ -17,10 +18,11 @@ def read_hdf5_test(hdf5_file):
             bb_vehicles_data = np.array(bb_vehicles[str(time)])
             bb_walkers_data = np.array(bb_walkers[str(time)])
             depth_data = np.array(depth[str(time)])
-            return rgb_data, bb_vehicles_data, bb_walkers_data, depth_data
+            lidar_data = np.array(lidar[str(time)])
+            return rgb_data, bb_vehicles_data, bb_walkers_data, depth_data, lidar_data
 
 
-def treat_single_image(rgb_data, bb_vehicles_data, bb_walkers_data, depth_data, save_to_many_single_files=False):
+def treat_single_image(rgb_data, bb_vehicles_data, bb_walkers_data, depth_data, lidar_data, save_to_many_single_files=False):
     # raw rgb
     if save_to_many_single_files:
         cv2.imwrite('raw_img.jpeg', rgb_data)
@@ -49,34 +51,47 @@ def treat_single_image(rgb_data, bb_vehicles_data, bb_walkers_data, depth_data, 
     # normalized_depth = cv2.applyColorMap(normalized_depth, cv2.COLORMAP_HOT)
     if save_to_many_single_files:
         cv2.imwrite('depth_minmaxnorm.png', normalized_depth)
-    return rgb_data, normalized_depth
+    if save_to_many_single_files:
+        cv2.imwrite('lidar_img.png', lidar_data)
+    return rgb_data, normalized_depth, lidar_data
 
 
-def create_video_sample(hdf5_file, show_depth=True):
+def create_video_sample(hdf5_file, data_path, show_depth=True, show_lidar=True):
     with h5py.File(hdf5_file, 'r') as file:
         frame_width = file.attrs['sensor_width']
         frame_height = file.attrs['sensor_height']
-        if show_depth:
+        if (show_depth and not show_lidar) or ( not show_depth and show_lidar):
             frame_width = frame_width * 2
-        out = cv2.VideoWriter('output.mp4', cv2.VideoWriter_fourcc('m', 'p', '4', 'v'), 20, (frame_width, frame_height))
+        elif show_depth and show_lidar:
+            frame_width = frame_width * 3
+        out = cv2.VideoWriter(data_path + '/output.mp4', cv2.VideoWriter_fourcc('m', 'p', '4', 'v'), 20, (frame_width, frame_height))
 
         for time_idx, time in enumerate(file['timestamps']['timestamps']):
             rgb_data = np.array(file['rgb'][str(time)])
             bb_vehicles_data = np.array(file['bounding_box']['vehicles'][str(time)])
             bb_walkers_data = np.array(file['bounding_box']['walkers'][str(time)])
             depth_data = np.array(file['depth'][str(time)])
-
+            lidar_data  = np.array(file['lidar'][str(time)])
             sys.stdout.write("\r")
             sys.stdout.write('Recording video. Frame {0}/{1}'.format(time_idx, len(file['timestamps']['timestamps'])))
             sys.stdout.flush()
-            rgb_frame, depth_frame = treat_single_image(rgb_data, bb_vehicles_data, bb_walkers_data, depth_data)
-            if show_depth:
-                composed_frame = np.hstack((rgb_frame, depth_frame))
+            rgb_frame, depth_frame, lidar_frame = treat_single_image(rgb_data, bb_vehicles_data, bb_walkers_data, depth_data, lidar_data)
+            if show_depth and not show_lidar:
+                #composed_frame_lidar = np.hstack((rgb_frame, lidar_frame))
+                composed_frame_depth = np.hstack((rgb_frame, depth_frame))
+                composed_frame = composed_frame_depth
+            elif show_lidar and not show_depth:
+                lidar_frame= np.float32(lidar_frame)
+                composed_frame = np.hstack((rgb_frame, lidar_frame))
+            elif show_lidar and show_depth:
+                composed_frame_depth = np.hstack((rgb_frame, depth_frame))
+                lidar_frame= np.float32(lidar_frame)
+                composed_frame = np.hstack((composed_frame_depth, lidar_frame))
             else:
-                composed_frame = rgb_frame                
+                composed_frame = rgb_frame        
             cv2.putText(composed_frame, 'timestamp', (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
             cv2.putText(composed_frame, str(time), (10, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-            out.write(composed_frame)
+            out.write(np.uint8(composed_frame))
 
     print('\nDone.')
 

@@ -3,7 +3,7 @@ import numpy as np
 
 
 class HDF5Saver:
-    def __init__(self, sensor_width, sensor_height, file_path_to_save="data/carla_dataset.hdf5"):
+    def __init__(self, sensor_width, sensor_height, file_path_to_save="/raid/rajat/carla-detection-dataset/carla_dataset.hdf5"):
         self.sensor_width = sensor_width
         self.sensor_height = sensor_height
 
@@ -11,6 +11,7 @@ class HDF5Saver:
         # Creating groups to store each type of data
         self.rgb_group = self.file.create_group("rgb")
         self.depth_group = self.file.create_group("depth")
+        self.lidar_group = self.file.create_group("lidar")
         self.ego_speed_group = self.file.create_group("ego_speed")
         self.bounding_box_group = self.file.create_group("bounding_box")
         self.bb_vehicles_group = self.bounding_box_group.create_group("vehicles")
@@ -30,10 +31,11 @@ class HDF5Saver:
         self.timestamp_group.attrs['time_format'] = "current time in MILISSECONDS since the unix epoch " \
                                                     "(time.time()*1000 in python3)"
 
-    def record_data(self, rgb_array, depth_array, bounding_box, ego_speed, timestamp):
+    def record_data(self, rgb_array, depth_array, lidar_array, bounding_box, ego_speed, timestamp):
         timestamp = str(timestamp)
         self.rgb_group.create_dataset(timestamp, data=rgb_array)
         self.depth_group.create_dataset(timestamp, data=depth_array)
+        self.lidar_group.create_dataset(timestamp, data=lidar_array)
         self.ego_speed_group.create_dataset(timestamp, data=ego_speed)
         self.bb_vehicles_group.create_dataset(timestamp, data=bounding_box[0])
         self.bb_walkers_group.create_dataset(timestamp, data=bounding_box[1])
